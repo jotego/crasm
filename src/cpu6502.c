@@ -247,8 +247,10 @@ static int standard(int code, char* label, char* mnemo, char* oper)
 
   if (cpuflag < 2)
   {
-    if (mode == 4 || opcode == 0x7c || opcode == 0x89 ||
-                     opcode == 0x1a || opcode == 0x3a)
+    if (mode == 4 ||
+	opcode == 0x7c ||
+	opcode == 0x89 || opcode == 0x34 || opcode == 0x3c ||
+	opcode == 0x1a || opcode == 0x3a)
     {
       crasm_error("illegal use of 65C02 addressing mode");
     }
@@ -339,18 +341,123 @@ regs("s", 4)
 endmnemos
 
 
-startmnemos(m65c02)
 
-mnemo("phx",   single,   0xda)  /* 65c02 special mnemonics */
+static int op_rmb(int code, char* label, char* mnemo, char* oper) /* single byte instructions  */
+{
+  struct result* r;
+  int value = 0;
+
+  r = parse(oper);
+  checktype(r, L_ABSOLUTE);
+  value = r->value;
+  if (value != (byte)(value))
+    crasm_warning("operand overflow");
+  insert8(code);
+  insert8(value);
+  return 0;
+}
+
+static int op_bbr(int code, char* label, char* mnemo, char* oper) /* single byte instructions  */
+{
+  char *oper1, *oper2;
+  struct result *r1, *r2;
+  extern unsigned long pc;
+  int nn;
+  int dd;
+
+  if (! filter(oper, "?_,_?", &oper1, &oper2))
+    crasm_error("illegal operand syntax");
+  r1 = parse(oper1);
+  checktype(r1, L_ABSOLUTE);
+  nn = r1->value;
+  if (nn != (byte)nn)
+    crasm_warning("operand 1 overflow");
+  r2 = parse(oper2);
+  checktype(r2, L_ABSOLUTE);
+  dd = r2->value - pc - 3;  /* is this correct */
+  insert8(code);
+  insert8((byte)nn);
+  insert8((byte)dd);
+  if (dd != (byte)dd)
+    crasm_error("too long branch");
+  return 0;
+}
+
+static int op_rmbx(int code, char* label, char* mnemo, char* oper) /* single byte instructions  */
+{
+  char *bitno, *xoper;
+  char xmnemo[8];
+  struct result* r;
+  struct label *l;
+
+  if (! filter(oper, "?_,_?", &bitno, &xoper))
+    crasm_error("illegal operand syntax");
+  r = parse(bitno);
+  checktype(r, L_ABSOLUTE);
+  if (r->value < 0 || r->value > 7)
+    crasm_error("bit number out of range");
+  sprintf(xmnemo, "%s%c", mnemo, '0'+(int)r->value);
+  l = searchlabel(xmnemo);
+  if (l == 0 || l->type != L_MNEMO)
+    crasm_error("internal error");
+  return (*l->ptr)(l->modifier, label, xmnemo, xoper);
+}
+
+
+startmnemos(m65c02)
+/* 65c02 additional mnemonics */
+mnemo("phx",   single,   0xda)
 mnemo("plx",   single,   0xfa)
 mnemo("phy",   single,   0x5a)
 mnemo("ply",   single,   0x7a)
-
 mnemo("bra",   branch,   0x80)
-
 mnemo2("stz",   7, 0x00, 0)
 mnemo2("tsb",   4, 0xfe, F_noacc | F_noindx)
 mnemo2("trb",   4, 0x0e, F_noacc | F_noindx)
+
+/* Rockwell mnemonics */
+mnemo("rmb0",   op_rmb,   0x07)
+mnemo("rmb1",   op_rmb,   0x17)
+mnemo("rmb2",   op_rmb,   0x27)
+mnemo("rmb3",   op_rmb,   0x37)
+mnemo("rmb4",   op_rmb,   0x47)
+mnemo("rmb5",   op_rmb,   0x57)
+mnemo("rmb6",   op_rmb,   0x67)
+mnemo("rmb7",   op_rmb,   0x77)
+mnemo("smb0",   op_rmb,   0x87)
+mnemo("smb1",   op_rmb,   0x97)
+mnemo("smb2",   op_rmb,   0xa7)
+mnemo("smb3",   op_rmb,   0xb7)
+mnemo("smb4",   op_rmb,   0xc7)
+mnemo("smb5",   op_rmb,   0xd7)
+mnemo("smb6",   op_rmb,   0xe7)
+mnemo("smb7",   op_rmb,   0xf7)
+mnemo("bbr0",   op_bbr,   0x0f)
+mnemo("bbr1",   op_bbr,   0x1f)
+mnemo("bbr2",   op_bbr,   0x2f)
+mnemo("bbr3",   op_bbr,   0x3f)
+mnemo("bbr4",   op_bbr,   0x4f)
+mnemo("bbr5",   op_bbr,   0x5f)
+mnemo("bbr6",   op_bbr,   0x6f)
+mnemo("bbr7",   op_bbr,   0x7f)
+mnemo("bbs0",   op_bbr,   0x8f)
+mnemo("bbs1",   op_bbr,   0x9f)
+mnemo("bbs2",   op_bbr,   0xaf)
+mnemo("bbs3",   op_bbr,   0xbf)
+mnemo("bbs4",   op_bbr,   0xcf)
+mnemo("bbs5",   op_bbr,   0xdf)
+mnemo("bbs6",   op_bbr,   0xef)
+mnemo("bbs7",   op_bbr,   0xff)
+/* Separated versions, e.g. rmb bit,zp */
+mnemo("rmb",   op_rmbx,   0)
+mnemo("smb",   op_rmbx,   0)
+mnemo("bbr",   op_rmbx,   0)
+mnemo("bbs",   op_rmbx,   0)
+
+
+/* WDC mnemonics */
+mnemo("wai",   single,   0xcb)
+mnemo("stp",   single,   0xcd)
 
 endmnemos
 
